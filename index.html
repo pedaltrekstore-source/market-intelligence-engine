@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Market Intelligence Engine</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
+  :root {
+    --bg:#080e1a; --surface:#0f1929; --card:#141f30; --border:#1e2d45; --border2:#243450;
+    --text:#e8edf5; --muted:#6b7fa0; --brand:#3b82f6; --brand2:#60a5fa;
+    --green:#10b981; --yellow:#f59e0b; --red:#ef4444; --cyan:#06b6d4;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'Space Grotesk',system-ui,sans-serif;min-height:100vh;line-height:1.5}
+  .header{border-bottom:1px solid var(--border);padding:0 32px;height:56px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:rgba(8,14,26,0.95);backdrop-filter:blur(12px);z-index:100}
+  .logo{font-size:16px;font-weight:800;letter-spacing:-0.5px;display:flex;align-items:center;gap:10px}
+  .logo-dot{width:8px;height:8px;border-radius:50%;background:var(--brand);box-shadow:0 0 8px var(--brand)}
+  .container{max-width:1100px;margin:0 auto;padding:40px 24px}
+  .tabs{display:flex;gap:4px;border-bottom:1px solid var(--border);margin-bottom:32px}
+  .tab{padding:10px 18px;font-size:14px;font-weight:600;cursor:pointer;color:var(--muted);border-bottom:2px solid transparent;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none;font-family:inherit}
+  .tab.active{color:var(--text);border-bottom-color:var(--brand)}
+  .tab-panel{display:none}.tab-panel.active{display:block}
+  .card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:24px}
+  .card-sm{padding:16px 20px;border-radius:10px}
+  .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+  .form-group{display:flex;flex-direction:column;gap:6px}
+  .form-group.full{grid-column:1/-1}
+  label{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+  input,select{background:var(--surface);border:1px solid var(--border2);color:var(--text);border-radius:8px;padding:10px 14px;font-size:14px;font-family:inherit;width:100%;outline:none;transition:border-color .15s}
+  input:focus,select:focus{border-color:var(--brand)}
+  input::placeholder{color:var(--muted)}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:10px 20px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;transition:all .15s;border:none;font-family:inherit}
+  .btn-primary{background:var(--brand);color:#fff}
+  .btn-primary:hover{background:#2563eb;transform:translateY(-1px);box-shadow:0 4px 20px rgba(59,130,246,.35)}
+  .btn-primary:disabled{opacity:.5;cursor:not-allowed;transform:none;box-shadow:none}
+  .btn-ghost{background:transparent;color:var(--muted);border:1px solid var(--border2)}
+  .btn-ghost:hover{color:var(--text);border-color:var(--muted)}
+  .btn-danger{background:rgba(239,68,68,.1);color:var(--red);border:1px solid rgba(239,68,68,.2)}
+  .btn-sm{padding:6px 12px;font-size:12px}
+  .badge{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;font-size:12px;font-weight:700}
+  .badge-pending{background:rgba(107,127,160,.15);color:var(--muted)}
+  .badge-running{background:rgba(59,130,246,.15);color:var(--brand2)}
+  .badge-completed{background:rgba(16,185,129,.15);color:var(--green)}
+  .badge-error{background:rgba(239,68,68,.15);color:var(--red)}
+  .pulse{animation:pulse 1.5s infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+  .progress-wrap{background:var(--border);border-radius:4px;height:6px;overflow:hidden}
+  .progress-fill{height:100%;border-radius:4px;background:linear-gradient(90deg,var(--brand),var(--cyan));transition:width .5s ease}
+  .score-ring-wrap{position:relative;width:64px;height:64px;flex-shrink:0}
+  .score-ring-wrap svg{transform:rotate(-90deg)}
+  .score-label{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:17px;font-weight:800;line-height:1}
+  .scan-item{display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+  .scan-item:last-child{border-bottom:none}
+  .scan-item:hover{background:rgba(255,255,255,.02)}
+  .scan-item.active{background:rgba(59,130,246,.07)}
+  .scan-niche{font-weight:700;font-size:14px}
+  .scan-meta{font-size:12px;color:var(--muted);margin-top:2px}
+  .opp-card{display:flex;gap:18px;padding:20px;border:1px solid var(--border);border-radius:12px;margin-bottom:12px;background:var(--card)}
+  .opp-card:hover{border-color:var(--border2)}
+  .opp-rank{font-size:20px;font-weight:900;color:var(--border2);width:28px;text-align:center;padding-top:14px;flex-shrink:0}
+  .opp-body{flex:1;min-width:0}
+  .opp-name{font-size:16px;font-weight:700;margin-bottom:8px}
+  .opp-metrics{display:flex;gap:20px;margin-bottom:10px;flex-wrap:wrap}
+  .opp-metric label{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;display:block}
+  .opp-metric strong{font-size:14px}
+  .opp-phrases{background:rgba(255,255,255,.025);border-radius:8px;padding:10px 14px;margin-top:8px}
+  .opp-phrase{font-size:13px;font-style:italic;color:var(--muted);margin-bottom:4px}
+  .opp-phrase::before{content:'\201C';color:var(--brand)}
+  .opp-phrase::after{content:'\201D';color:var(--brand)}
+  .opp-tags{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .tag{font-size:11px;background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);color:var(--brand2);padding:2px 8px;border-radius:4px;font-family:'JetBrains Mono',monospace}
+  .empty{text-align:center;padding:60px 20px;color:var(--muted)}
+  .empty-icon{font-size:48px;margin-bottom:12px}
+  .empty h3{font-size:16px;color:var(--text);margin-bottom:6px}
+  .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px}
+  .stat-card{text-align:center}
+  .stat-value{font-size:32px;font-weight:900}
+  .stat-label{font-size:12px;color:var(--muted);margin-top:2px}
+  .two-col{display:grid;grid-template-columns:300px 1fr;gap:24px;align-items:start}
+  .alert{padding:12px 16px;border-radius:8px;font-size:13px;margin-bottom:16px}
+  .alert-info{background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.2);color:var(--brand2)}
+  .source-chip{font-size:11px;background:var(--border);padding:2px 8px;border-radius:4px;color:var(--muted)}
+  .words-list{display:flex;flex-wrap:wrap;gap:8px}
+  .word-item{font-family:'JetBrains Mono',monospace;font-size:12px;padding:3px 10px;border-radius:4px;background:var(--surface);border:1px solid var(--border2);color:var(--text)}
+  .spinner{width:16px;height:16px;border:2px solid rgba(255,255,255,.2);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media(max-width:768px){.two-col{grid-template-columns:1fr}.stats-grid{grid-template-columns:repeat(2,1fr)}.form-grid{grid-template-columns:1fr}.container{padding:20px 16px}}
+</style>
+</head>
+<body>
+<header class="header">
+  <div class="logo"><div class="logo-dot"></div>Market Intelligence Engine</div>
+  <div><span id="header-status" style="font-size:12px;color:var(--muted)"></span></div>
+</header>
+<div class="container">
+  <div class="tabs">
+    <button class="tab active" onclick="switchTab('dashboard')">Dashboard</button>
+    <button class="tab" onclick="switchTab('nova')">Nova Varredura</button>
+    <button class="tab" onclick="switchTab('feed')">Opportunity Feed</button>
+  </div>
+
+  <!-- DASHBOARD -->
+  <div id="tab-dashboard" class="tab-panel active">
+    <div class="stats-grid">
+      <div class="card card-sm stat-card"><div class="stat-value" id="stat-total">0</div><div class="stat-label">Total</div></div>
+      <div class="card card-sm stat-card"><div class="stat-value" id="stat-done" style="color:var(--green)">0</div><div class="stat-label">Concluídas</div></div>
+      <div class="card card-sm stat-card"><div class="stat-value" id="stat-running" style="color:var(--brand2)">0</div><div class="stat-label">Rodando</div></div>
+      <div class="card card-sm stat-card"><div class="stat-value" id="stat-opps" style="color:var(--yellow)">0</div><div class="stat-label">Oportunidades</div></div>
+    </div>
+    <div class="two-col">
+      <div class="card" style="padding:0;overflow:hidden">
+        <div style="padding:14px 20px;border-bottom:1px solid var(--border);font-weight:700;font-size:14px;display:flex;justify-content:space-between;align-items:center">
+          Varreduras <button class="btn btn-sm btn-ghost" onclick="loadScans()">&#8635;</button>
+        </div>
+        <div id="scan-list"><div class="empty" style="padding:40px 20px"><div>Nenhuma varredura ainda.</div></div></div>
+      </div>
+      <div id="scan-detail">
+        <div class="empty">
+          <div class="empty-icon">&#128269;</div>
+          <h3>Selecione uma varredura</h3>
+          <div>Clique em uma varredura para ver os detalhes.</div>
+          <br>
+          <button class="btn btn-primary" onclick="switchTab('nova')">+ Nova Varredura</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- NOVA VARREDURA -->
+  <div id="tab-nova" class="tab-panel">
+    <div style="max-width:600px;margin:0 auto">
+      <h2 style="font-size:22px;font-weight:800;margin-bottom:8px">Nova Varredura</h2>
+      <p style="color:var(--muted);font-size:14px;margin-bottom:28px">Configure o nicho que deseja analisar.</p>
+      <div class="alert alert-info">&#128161; <strong>Fontes gratuitas:</strong> DuckDuckGo, Google News RSS, Reddit. Sem APIs pagas.</div>
+      <div class="card">
+        <div class="form-grid">
+          <div class="form-group full">
+            <label>Nicho / Palavra-chave *</label>
+            <input id="f-niche" type="text" placeholder="Ex: ração para gatos, academia, delivery de comida" autofocus>
+          </div>
+          <div class="form-group full">
+            <label>Nome da varredura (opcional)</label>
+            <input id="f-name" type="text" placeholder="Ex: Pets Q1 2025">
+          </div>
+          <div class="form-group">
+            <label>País</label>
+            <select id="f-country">
+              <option value="BR" selected>Brasil</option>
+              <option value="US">EUA</option>
+              <option value="PT">Portugal</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Idioma</label>
+            <select id="f-lang">
+              <option value="pt" selected>Português</option>
+              <option value="en">Inglês</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:24px;padding-top:20px;border-top:1px solid var(--border)">
+          <button id="btn-scan" class="btn btn-primary" onclick="createScan()" style="width:100%;padding:13px">
+            &#128640; Iniciar Varredura
+          </button>
+        </div>
+      </div>
+      <div id="scan-created-msg" style="display:none;margin-top:16px" class="card">
+        <div style="font-weight:700;color:var(--green);margin-bottom:8px">&#10003; Varredura iniciada!</div>
+        <div style="font-size:13px;color:var(--muted)">Acompanhe o progresso no Dashboard.</div>
+        <button class="btn btn-ghost btn-sm" style="margin-top:12px" onclick="switchTab('dashboard')">Ver Dashboard &rarr;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- FEED -->
+  <div id="tab-feed" class="tab-panel">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px">
+      <div>
+        <h2 style="font-size:22px;font-weight:800;margin-bottom:4px">&#9889; Opportunity Feed</h2>
+        <p style="color:var(--muted);font-size:13px">Todas as oportunidades detectadas, rankeadas por score.</p>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <label style="font-size:12px;color:var(--muted);text-transform:none;letter-spacing:0;margin:0">Score min:</label>
+        <input type="number" id="min-score" value="0" min="0" max="100" style="width:70px" onchange="renderFeed()">
+      </div>
+    </div>
+    <div id="feed-content">
+      <div class="empty"><div class="empty-icon">&#128202;</div><h3>Nenhuma oportunidade ainda</h3><div>Crie uma varredura para comecar.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+var scans=[], selectedScanId=null, pollTimer=null;
+
+function switchTab(n){
+  var names=['dashboard','nova','feed'];
+  document.querySelectorAll('.tab').forEach(function(t,i){t.classList.toggle('active',names[i]===n)});
+  document.querySelectorAll('.tab-panel').forEach(function(p){p.classList.remove('active')});
+  document.getElementById('tab-'+n).classList.add('active');
+  if(n==='feed') renderFeed();
+}
+
+async function api(method,path,body){
+  var opts={method:method,headers:{'Content-Type':'application/json'}};
+  if(body) opts.body=JSON.stringify(body);
+  var r=await fetch('/api'+path,opts);
+  if(!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function loadScans(){
+  try{
+    scans=await api('GET','/scans');
+    renderScanList();updateStats();
+    if(selectedScanId){var s=scans.find(function(x){return x.id===selectedScanId});if(s)renderScanDetail(s);}
+  }catch(e){console.error(e);}
+}
+
+function updateStats(){
+  document.getElementById('stat-total').textContent=scans.length;
+  document.getElementById('stat-done').textContent=scans.filter(function(s){return s.status==='completed'}).length;
+  document.getElementById('stat-running').textContent=scans.filter(function(s){return s.status==='running'||s.status==='pending'}).length;
+  var t=scans.reduce(function(a,s){return a+(s.result&&s.result.opportunities?s.result.opportunities.length:0)},0);
+  document.getElementById('stat-opps').textContent=t;
+}
+
+function esc(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');}
+function fmtDate(iso){if(!iso)return'';var d=new Date(iso);return d.toLocaleDateString('pt-BR')+' '+d.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});}
+function badge(st){var m={pending:['badge-pending','Pendente'],running:['badge-running','Rodando'],completed:['badge-completed','Concluido'],error:['badge-error','Erro']};var c=m[st]||m.pending;return '<span class="badge '+c[0]+'">'+c[1]+'</span>';}
+
+function renderScanList(){
+  var el=document.getElementById('scan-list');
+  if(!scans.length){el.innerHTML='<div class="empty" style="padding:40px 20px"><div>Nenhuma varredura ainda.</div></div>';return;}
+  el.innerHTML=scans.map(function(s){
+    return '<div class="scan-item'+(s.id===selectedScanId?' active':'')+'" onclick="selectScan(\''+ s.id +'\')">'+
+      '<div style="flex:1;min-width:0"><div class="scan-niche">'+esc(s.niche)+'</div>'+
+      '<div class="scan-meta">'+esc(s.name)+' &bull; '+fmtDate(s.created_at)+'</div>'+
+      (s.status==='running'?'<div style="margin-top:6px"><div class="progress-wrap"><div class="progress-fill" style="width:'+s.progress+'%"></div></div>'+
+      '<div style="font-size:11px;color:var(--muted);margin-top:3px">'+esc(s.message||'')+'</div></div>':'')+'</div>'+
+      '<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">'+badge(s.status)+
+      (s.status==='completed'?'<span style="font-size:11px;color:var(--muted)">'+(s.result&&s.result.opportunities?s.result.opportunities.length:0)+' opps</span>':'')+
+      '</div></div>';
+  }).join('');
+}
+
+function selectScan(id){
+  selectedScanId=id;
+  var s=scans.find(function(x){return x.id===id;});
+  if(s)renderScanDetail(s);
+  renderScanList();
+}
+
+function renderScanDetail(s){
+  var el=document.getElementById('scan-detail');
+  var opps=(s.result&&s.result.opportunities)||[];
+  var sources=(s.result&&s.result.sources_used)||[];
+  var words=(s.result&&s.result.top_words)||[];
+  var html='<div class="card" style="margin-bottom:16px">'+
+    '<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:16px">'+
+    '<div><div style="font-size:20px;font-weight:800">'+esc(s.niche)+'</div>'+
+    '<div style="font-size:13px;color:var(--muted);margin-top:2px">'+esc(s.name)+' &bull; '+fmtDate(s.created_at)+'</div></div>'+
+    '<div style="display:flex;gap:8px;align-items:center">'+badge(s.status)+
+    '<button class="btn btn-danger btn-sm" onclick="deleteScan(\''+ s.id +'\')">&#128465;</button></div></div>';
+  if(s.status==='running'){
+    html+='<div style="margin-bottom:12px"><div style="display:flex;justify-content:space-between;font-size:12px;color:var(--muted);margin-bottom:6px">'+
+    '<span class="pulse">'+esc(s.message||'Processando...')+'</span><span>'+s.progress+'%</span></div>'+
+    '<div class="progress-wrap" style="height:8px"><div class="progress-fill" style="width:'+s.progress+'%"></div></div></div>';
+  }
+  if(s.status==='completed'){
+    html+='<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px">'+
+    '<div class="card card-sm" style="text-align:center"><div style="font-size:24px;font-weight:900;color:var(--brand2)">'+(s.result.total_texts_collected||0)+'</div><div style="font-size:11px;color:var(--muted)">textos coletados</div></div>'+
+    '<div class="card card-sm" style="text-align:center"><div style="font-size:24px;font-weight:900;color:var(--yellow)">'+(s.result.total_pain_texts||0)+'</div><div style="font-size:11px;color:var(--muted)">com dor detectada</div></div>'+
+    '<div class="card card-sm" style="text-align:center"><div style="font-size:24px;font-weight:900;color:var(--green)">'+opps.length+'</div><div style="font-size:11px;color:var(--muted)">oportunidades</div></div></div>';
+    html+='<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.05em">Fontes usadas</div>'+
+    '<div style="display:flex;gap:6px;flex-wrap:wrap">'+(sources.length?sources.map(function(s){return'<span class="source-chip">'+esc(s)+'</span>'}).join(''):'<span style="font-size:12px;color:var(--muted)">nenhuma</span>')+'</div></div>';
+    if(words.length){
+      html+='<div><div style="font-size:11px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em">Palavras mais frequentes</div>'+
+      '<div class="words-list">'+ words.slice(0,15).map(function(w){return'<span class="word-item">'+esc(w[0])+' <span style="color:var(--muted);font-size:10px">'+w[1]+'</span></span>'}).join('')+'</div></div>';
+    }
+    if(opps.length){
+      html+='<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">'+
+      '<button class="btn btn-primary btn-sm" onclick="switchTab(\'feed\')">Ver Oportunidades &rarr;</button></div>';
+    }
+  }
+  if(s.status==='error'){
+    html+='<div style="color:var(--red);font-size:13px;background:rgba(239,68,68,.08);padding:12px;border-radius:8px">'+esc(s.message)+'</div>';
+  }
+  html+='</div>';
+  el.innerHTML=html;
+}
+
+async function createScan(){
+  var niche=document.getElementById('f-niche').value.trim();
+  if(!niche){document.getElementById('f-niche').focus();return;}
+  var btn=document.getElementById('btn-scan');
+  btn.disabled=true;btn.innerHTML='<div class="spinner"></div> Iniciando...';
+  try{
+    var scan=await api('POST','/scans',{
+      niche:niche,
+      name:document.getElementById('f-name').value.trim()||undefined,
+      country:document.getElementById('f-country').value,
+      language:document.getElementById('f-lang').value,
+    });
+    document.getElementById('f-niche').value='';
+    document.getElementById('f-name').value='';
+    document.getElementById('scan-created-msg').style.display='block';
+    scans.unshift(scan);selectedScanId=scan.id;
+    renderScanList();updateStats();renderScanDetail(scan);
+    startPolling();
+    setTimeout(function(){switchTab('dashboard');},1200);
+  }catch(e){alert('Erro: '+e.message);}
+  finally{btn.disabled=false;btn.innerHTML='&#128640; Iniciar Varredura';}
+}
+
+async function deleteScan(id){
+  if(!confirm('Remover esta varredura?'))return;
+  await api('DELETE','/scans/'+id);
+  scans=scans.filter(function(s){return s.id!==id;});
+  if(selectedScanId===id){
+    selectedScanId=null;
+    document.getElementById('scan-detail').innerHTML='<div class="empty"><div class="empty-icon">&#128269;</div><h3>Selecione uma varredura</h3></div>';
+  }
+  renderScanList();updateStats();
+}
+
+function renderFeed(){
+  var minScore=parseFloat(document.getElementById('min-score').value)||0;
+  var all=[];
+  scans.filter(function(s){return s.status==='completed';}).forEach(function(s){
+    if(s.result&&s.result.opportunities){
+      s.result.opportunities.forEach(function(o){all.push(Object.assign({},o,{scan_niche:s.niche,scan_id:s.id}));});
+    }
+  });
+  var filtered=all.filter(function(o){return o.score>=minScore;}).sort(function(a,b){return b.score-a.score;});
+  var el=document.getElementById('feed-content');
+  if(!filtered.length){
+    el.innerHTML='<div class="empty"><div class="empty-icon">&#128202;</div><h3>Nenhuma oportunidade ainda</h3><div>Crie uma varredura para comecar.</div></div>';
+    return;
+  }
+  var circ=2*Math.PI*26;
+  el.innerHTML=filtered.map(function(o,i){
+    var color=o.score>=70?'var(--green)':o.score>=40?'var(--brand2)':'var(--muted)';
+    var dash=((o.score/100)*circ).toFixed(1);
+    return '<div class="opp-card">'+
+      '<div class="opp-rank">#'+(i+1)+'</div>'+
+      '<div class="score-ring-wrap"><svg width="64" height="64" viewBox="0 0 64 64">'+
+      '<circle cx="32" cy="32" r="26" fill="none" stroke="var(--border)" stroke-width="5"/>'+
+      '<circle cx="32" cy="32" r="26" fill="none" stroke="'+color+'" stroke-width="5" stroke-dasharray="'+dash+' '+circ.toFixed(1)+'" stroke-linecap="round"/>'+
+      '</svg><div class="score-label" style="color:'+color+'">'+o.score.toFixed(0)+'</div></div>'+
+      '<div class="opp-body"><div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">'+
+      '<div class="opp-name">'+esc(o.name)+'</div>'+
+      '<span style="font-size:11px;color:var(--muted)">'+esc(o.scan_niche)+'</span></div>'+
+      '<div class="opp-metrics">'+
+      '<div class="opp-metric"><label>Evidencias</label><strong>'+o.evidence_count+'</strong></div>'+
+      '<div class="opp-metric"><label>Intensidade</label><strong>'+(o.avg_intensity*100).toFixed(0)+'%</strong></div>'+
+      '<div class="opp-metric"><label>Tendencia</label><strong>estavel</strong></div>'+
+      '</div>'+
+      (o.example_phrases&&o.example_phrases.length?'<div class="opp-phrases">'+ o.example_phrases.slice(0,2).map(function(p){return'<div class="opp-phrase">'+esc(p)+'</div>'}).join('')+'</div>':'')+
+      (o.keywords&&o.keywords.length?'<div class="opp-tags">'+ o.keywords.slice(0,6).map(function(k){return'<span class="tag">'+esc(k)+'</span>'}).join('')+'</div>':'')+
+      '</div></div>';
+  }).join('');
+}
+
+function startPolling(){
+  if(pollTimer)return;
+  pollTimer=setInterval(async function(){
+    var running=scans.filter(function(s){return s.status==='running'||s.status==='pending';});
+    if(!running.length){clearInterval(pollTimer);pollTimer=null;return;}
+    for(var i=0;i<running.length;i++){
+      try{
+        var updated=await api('GET','/scans/'+running[i].id);
+        var idx=scans.findIndex(function(x){return x.id===running[i].id;});
+        if(idx>=0)scans[idx]=updated;
+        if(updated.id===selectedScanId)renderScanDetail(updated);
+      }catch(e){}
+    }
+    renderScanList();updateStats();
+    var n=scans.filter(function(s){return s.status==='running';}).length;
+    document.getElementById('header-status').textContent=n?' '+ n +' varredura(s) em progresso':'';
+  },2500);
+}
+
+loadScans();
+setInterval(loadScans,10000);
+</script>
+</body>
+</html>
