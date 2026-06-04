@@ -1,6 +1,6 @@
-import os, json, uuid, time, threading
+import os, json, uuid, threading
 from datetime import datetime
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, send_file, request, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from dotenv import load_dotenv
 
@@ -13,21 +13,19 @@ app.secret_key = os.environ.get('SECRET_KEY', 'mie-secret-2024')
 
 db = SQLAlchemy(app)
 
-# ─── Models ──────────────────────────────────────────────────────────────────
-
 class Scan(db.Model):
     __tablename__ = 'scans'
-    id          = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    name        = db.Column(db.String(255), nullable=False)
-    niche       = db.Column(db.String(255), nullable=False)
-    country     = db.Column(db.String(10), default='BR')
-    language    = db.Column(db.String(10), default='pt')
-    status      = db.Column(db.String(20), default='pending')   # pending|running|completed|error
-    progress    = db.Column(db.Integer, default=0)
-    message     = db.Column(db.String(500), default='')
-    result_json = db.Column(db.Text, default='{}')
-    created_at  = db.Column(db.DateTime, default=datetime.utcnow)
-    completed_at= db.Column(db.DateTime, nullable=True)
+    id           = db.Column(db.String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
+    name         = db.Column(db.String(255), nullable=False)
+    niche        = db.Column(db.String(255), nullable=False)
+    country      = db.Column(db.String(10), default='BR')
+    language     = db.Column(db.String(10), default='pt')
+    status       = db.Column(db.String(20), default='pending')
+    progress     = db.Column(db.Integer, default=0)
+    message      = db.Column(db.String(500), default='')
+    result_json  = db.Column(db.Text, default='{}')
+    created_at   = db.Column(db.DateTime, default=datetime.utcnow)
+    completed_at = db.Column(db.DateTime, nullable=True)
 
     def to_dict(self):
         return {
@@ -43,10 +41,7 @@ class Scan(db.Model):
 with app.app_context():
     db.create_all()
 
-# ─── Scanner ──────────────────────────────────────────────────────────────────
-
-def run_scan(scan_id: str):
-    """Full scan pipeline running in background thread."""
+def run_scan(scan_id):
     from scanner import Scanner
     with app.app_context():
         scan = db.session.get(Scan, scan_id)
@@ -79,11 +74,16 @@ def run_scan(scan_id: str):
             scan.message = f'Erro: {str(e)}'
             db.session.commit()
 
-# ─── Routes ───────────────────────────────────────────────────────────────────
-
+# Serve index.html from root folder (no templates/ needed)
 @app.route('/')
 def index():
-    return render_template('index.html')
+    base = os.path.dirname(os.path.abspath(__file__))
+    # Try templates/index.html first, then root index.html
+    for path in [os.path.join(base, 'templates', 'index.html'),
+                 os.path.join(base, 'index.html')]:
+        if os.path.exists(path):
+            return send_file(path)
+    return 'index.html not found', 404
 
 @app.route('/api/scans', methods=['GET'])
 def list_scans():
@@ -95,7 +95,6 @@ def create_scan():
     data = request.json
     if not data or not data.get('niche'):
         return jsonify({'error': 'Nicho é obrigatório'}), 400
-
     scan = Scan(
         name=data.get('name') or f"Varredura: {data['niche']}",
         niche=data['niche'],
@@ -104,11 +103,8 @@ def create_scan():
     )
     db.session.add(scan)
     db.session.commit()
-
-    # Run in background thread
     t = threading.Thread(target=run_scan, args=(scan.id,), daemon=True)
     t.start()
-
     return jsonify(scan.to_dict()), 201
 
 @app.route('/api/scans/<scan_id>', methods=['GET'])
