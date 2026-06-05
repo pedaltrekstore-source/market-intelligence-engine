@@ -1,8 +1,9 @@
 """
-Market Intelligence Scanner - coleta dores e tendências de fontes gratuitas.
-Fontes: DuckDuckGo, Google News RSS, Reddit RSS
+Market Intelligence Scanner v2 - com análise GPT
+Fontes: DuckDuckGo, Google News, Reddit
+Análise: OpenAI GPT-4o-mini (barato e excelente)
 """
-import time, re, requests
+import os, time, re, json, requests
 from collections import Counter
 from typing import Callable, Optional
 
@@ -23,38 +24,30 @@ try:
 except Exception:
     HAS_FEEDPARSER = False
 
+try:
+    from openai import OpenAI
+    HAS_OPENAI = True
+except Exception:
+    HAS_OPENAI = False
+
 HEADERS = {'User-Agent': 'Mozilla/5.0 (compatible; MarketResearch/1.0)'}
 
 PAIN_PT = ['problema','erro','falha','ruim','péssimo','horrível','decepcionado',
            'não funciona','difícil','caro','impossível','nunca mais','vergonha',
            'absurdo','ridículo','lento','quebrado','defeito','reclamação',
-           'insatisfeito','arrependido','pior','terrível','frustrante']
+           'insatisfeito','arrependido','pior','terrível','frustrante',
+           'doente','machucado','passou mal','vomitou','reação','recall']
 
 PAIN_EN = ['problem','issue','broken','bad','terrible','horrible','disappointed',
            'not working','difficult','expensive','impossible','never again',
            'awful','ridiculous','slow','defective','complaint','unsatisfied',
-           'worst','frustrating','annoying','useless','scam']
-
-EMOT_PT = ['ódio','raiva','indignado','revoltado','péssimo','horrível',
-           'absurdo','vergonha','ridículo','nunca mais','lamentável','inaceitável']
-
-EMOT_EN = ['hate','angry','outraged','furious','terrible','horrible',
-           'absurd','shameful','ridiculous','never again','unacceptable']
+           'worst','frustrating','sick','recall','vomit','reaction']
 
 
 def clean_text(text: str) -> str:
     text = re.sub(r'http\S+', '', str(text))
     text = re.sub(r'\s+', ' ', text).strip()
-    return text[:500]
-
-
-def emotional_intensity(text: str, lang: str = 'pt') -> float:
-    t = text.lower()
-    words = EMOT_PT if lang == 'pt' else EMOT_EN
-    hits = sum(1 for w in words if w in t)
-    excl = t.count('!')
-    caps = sum(1 for c in text if c.isupper()) / max(len(text), 1)
-    return min(1.0, round(hits * 0.15 + excl * 0.08 + caps * 0.3, 2))
+    return text[:800]
 
 
 def is_pain_text(text: str, lang: str = 'pt') -> bool:
@@ -63,55 +56,78 @@ def is_pain_text(text: str, lang: str = 'pt') -> bool:
     return any(w in t for w in triggers)
 
 
-def extract_themes(texts: list, niche: str) -> list:
-    stop = {'de','da','do','em','para','com','por','um','uma','que','se',
-            'não','mas','ou','mais','como','até','foi','ele','ela',
-            'the','and','for','with','that','this','have','from','are',
-            'was','but','not','they','you','can','all','had','her','his',
-            niche.lower()}
-    word_counts = Counter()
-    for text in texts:
-        words = re.findall(r'\b[a-záàâãéêíóôõúüçA-Z]{4,}\b', text.lower())
-        word_counts.update(w for w in words if w not in stop)
+def analyze_with_gpt(texts: list, niche: str, lang: str = 'pt') -> list:
+    """Use GPT to analyze pain points and suggest products + copy angles."""
+    api_key = os.environ.get('OPENAI_API_KEY')
+    if not api_key or not HAS_OPENAI:
+        return []
+    
+    if not texts:
+        return []
+    
+    # Take top texts to fit in context (max ~50)
+    sample = texts[:50]
+    sample_text = '\n---\n'.join(f'{i+1}. {t[:300]}' for i, t in enumerate(sample))
+    
+    prompt = f"""Você é um analista de mercado especializado em e-commerce e dropshipping.
 
-    top = [w for w, _ in word_counts.most_common(30)]
-    themes, seen = [], set()
+Analisei textos reais da internet sobre o nicho: "{niche}"
 
-    for i, w1 in enumerate(top[:15]):
-        if w1 in seen:
-            continue
-        related = [w1]
-        for w2 in top[i+1:]:
-            if w2 in seen:
-                continue
-            co = sum(1 for t in texts if w1 in t.lower() and w2 in t.lower())
-            if co >= 2:
-                related.append(w2)
-            if len(related) >= 3:
-                break
+Textos coletados:
+{sample_text}
 
-        theme_texts = [t for t in texts if any(w in t.lower() for w in related)]
-        if theme_texts:
-            themes.append({
-                'label': ' + '.join(related[:3]).capitalize(),
-                'keywords': related[:5],
-                'evidence_count': len(theme_texts),
-                'examples': [clean_text(t) for t in theme_texts[:3]],
-                'avg_intensity': round(
-                    sum(emotional_intensity(t) for t in theme_texts) / len(theme_texts), 2
-                ),
-            })
-            seen.update(related)
-        if len(themes) >= 8:
-            break
+Sua tarefa: identificar de 3 a 7 DORES REAIS distintas neste nicho e retornar APENAS um JSON válido (sem markdown, sem ```) com esta estrutura:
 
-    return sorted(themes, key=lambda x: x['evidence_count'], reverse=True)
+{{
+  "opportunities": [
+    {{
+      "pain_name": "Nome curto e descritivo da dor (max 60 chars)",
+      "pain_description": "Descrição completa da dor em 1-2 frases",
+      "target_audience": "Quem tem essa dor (perfil demográfico + comportamental)",
+      "evidence_count_estimate": número estimado de textos que mencionam essa dor,
+      "intensity": "alta" | "média" | "baixa",
+      "products_to_sell": [
+        "Produto físico 1 que resolve essa dor",
+        "Produto físico 2",
+        "Produto físico 3"
+      ],
+      "copy_angles": [
+        "Ângulo de copy 1 (headline para anúncio)",
+        "Ângulo de copy 2",
+        "Ângulo de copy 3"
+      ],
+      "example_quotes": [
+        "Citação real do texto que ilustra a dor (max 150 chars)",
+        "Outra citação real"
+      ],
+      "score": número de 0 a 100 indicando potencial comercial
+    }}
+  ]
+}}
 
-
-def score_opp(theme: dict, total: int) -> float:
-    freq = min(theme['evidence_count'] / max(total, 1) * 100, 100)
-    intens = theme['avg_intensity'] * 100
-    return round(min(freq * 0.50 + intens * 0.50, 100), 1)
+REGRAS:
+- Foque em dores que podem ser resolvidas com PRODUTOS FÍSICOS (dropshipping)
+- Use citações REAIS dos textos fornecidos, não invente
+- Score considera: frequência da dor + intensidade emocional + viabilidade comercial
+- Retorne APENAS o JSON, sem texto antes ou depois"""
+    
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Você é um analista de mercado expert. Sempre retorna apenas JSON válido."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.3,
+            response_format={"type": "json_object"},
+        )
+        result_text = response.choices[0].message.content
+        parsed = json.loads(result_text)
+        return parsed.get('opportunities', [])
+    except Exception as e:
+        print(f'GPT error: {e}')
+        return []
 
 
 class Scanner:
@@ -128,47 +144,77 @@ class Scanner:
 
         all_texts, sources_used = [], []
 
-        upd(15, 'Buscando no DuckDuckGo...')
+        upd(10, 'Buscando no DuckDuckGo...')
         ddg = self._ddg()
         all_texts.extend(ddg)
         if ddg:
             sources_used.append('DuckDuckGo')
 
-        upd(35, 'Coletando notícias (Google News RSS)...')
+        upd(25, 'Coletando notícias (Google News RSS)...')
         news = self._news_rss()
         all_texts.extend(news)
         if news:
             sources_used.append('Google News')
 
-        upd(50, 'Buscando discussões (Reddit RSS)...')
+        upd(40, 'Buscando discussões (Reddit RSS)...')
         reddit = self._reddit_rss()
         all_texts.extend(reddit)
         if reddit:
             sources_used.append('Reddit')
 
-        upd(65, 'Filtrando dores e reclamações...')
+        upd(55, 'Filtrando dores e reclamações...')
         pain = [t for t in all_texts if is_pain_text(t, self.lang)]
-        if len(pain) < 3:
+        if len(pain) < 5:
             pain = all_texts
 
-        upd(80, 'Agrupando temas e calculando scores...')
-        themes = extract_themes(pain, self.niche)
-
+        # NEW: GPT analysis
+        upd(70, 'Analisando dores com IA (GPT-4o-mini)...')
+        gpt_opportunities = analyze_with_gpt(pain, self.niche, self.lang)
+        
+        upd(90, 'Finalizando relatório...')
+        
+        # Format opportunities for frontend
         opportunities = []
-        for th in themes:
-            sc = score_opp(th, len(pain))
+        if gpt_opportunities:
+            for opp in gpt_opportunities:
+                opportunities.append({
+                    'name': opp.get('pain_name', 'Dor identificada'),
+                    'description': opp.get('pain_description', ''),
+                    'target_audience': opp.get('target_audience', ''),
+                    'score': opp.get('score', 50),
+                    'evidence_count': opp.get('evidence_count_estimate', 0),
+                    'intensity': opp.get('intensity', 'média'),
+                    'products_to_sell': opp.get('products_to_sell', []),
+                    'copy_angles': opp.get('copy_angles', []),
+                    'example_phrases': opp.get('example_quotes', []),
+                    'keywords': [],  # Backwards compat
+                    'avg_intensity': {'alta': 0.9, 'média': 0.6, 'baixa': 0.3}.get(opp.get('intensity', 'média'), 0.5),
+                    'trend_direction': 'stable',
+                    'sources': sources_used,
+                    'ai_powered': True,
+                })
+
+        # If GPT failed or no key, fall back to old behavior
+        if not opportunities and pain:
             opportunities.append({
-                'name': th['label'],
-                'score': sc,
-                'evidence_count': th['evidence_count'],
-                'keywords': th['keywords'],
-                'example_phrases': th['examples'],
-                'avg_intensity': th['avg_intensity'],
+                'name': f'Análise básica de {self.niche}',
+                'description': 'Análise IA não disponível. Configure OPENAI_API_KEY para análise completa.',
+                'target_audience': '',
+                'score': 30,
+                'evidence_count': len(pain),
+                'intensity': 'média',
+                'products_to_sell': [],
+                'copy_angles': [],
+                'example_phrases': [clean_text(t)[:200] for t in pain[:3]],
+                'keywords': [],
+                'avg_intensity': 0.5,
                 'trend_direction': 'stable',
                 'sources': sources_used,
+                'ai_powered': False,
             })
+
         opportunities.sort(key=lambda x: x['score'], reverse=True)
-        upd(95, 'Finalizando...')
+        upd(95, 'Concluído!')
 
         return {
             'niche': self.niche,
@@ -181,6 +227,7 @@ class Scanner:
                 for w in re.findall(r'\b[a-záàâãéêíóôõúüç]{4,}\b', t.lower())
             ).most_common(20)),
             'scanned_at': time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime()),
+            'ai_enabled': bool(os.environ.get('OPENAI_API_KEY')) and HAS_OPENAI,
         }
 
     def _ddg(self) -> list:
@@ -188,21 +235,22 @@ class Scanner:
             return []
         qs = ([f'{self.niche} problema reclamação',
                f'{self.niche} não funciona ruim',
-               f'{self.niche} reclamação review']
+               f'{self.niche} review experiência',
+               f'{self.niche} dor dificuldade']
               if self.lang == 'pt' else
               [f'{self.niche} problem complaint',
                f'{self.niche} not working review',
-               f'{self.niche} issue bad'])
+               f'{self.niche} issue bad experience'])
         texts = []
         for q in qs:
             try:
-                results = list(DDGS().text(q, max_results=15,
+                results = list(DDGS().text(q, max_results=20,
                                region='br-pt' if self.lang == 'pt' else 'us-en'))
                 for r in results:
                     t = clean_text(f"{r.get('title','')} {r.get('body','')}")
-                    if len(t) > 30:
+                    if len(t) > 40:
                         texts.append(t)
-                time.sleep(2.0)
+                time.sleep(1.5)
             except Exception:
                 time.sleep(3)
         return texts
@@ -218,9 +266,9 @@ class Scanner:
             url = f'https://news.google.com/rss/search?q={requests.utils.quote(q)}&hl={hl}&gl={gl}&ceid={ceid}'
             feed = feedparser.parse(url)
             texts = []
-            for e in feed.entries[:25]:
+            for e in feed.entries[:30]:
                 t = clean_text(f"{e.get('title','')} {e.get('summary','')}")
-                if len(t) > 30:
+                if len(t) > 40:
                     texts.append(t)
             return texts
         except Exception:
@@ -231,13 +279,13 @@ class Scanner:
             return []
         try:
             q = f'{self.niche} problem' if self.lang == 'en' else f'{self.niche} problema'
-            url = f'https://www.reddit.com/search.rss?q={requests.utils.quote(q)}&sort=relevance&limit=25'
+            url = f'https://www.reddit.com/search.rss?q={requests.utils.quote(q)}&sort=relevance&limit=30'
             resp = requests.get(url, headers=HEADERS, timeout=12)
             feed = feedparser.parse(resp.text)
             texts = []
-            for e in feed.entries[:25]:
+            for e in feed.entries[:30]:
                 t = clean_text(f"{e.get('title','')} {e.get('summary','')}")
-                if len(t) > 30:
+                if len(t) > 40:
                     texts.append(t)
             return texts
         except Exception:
